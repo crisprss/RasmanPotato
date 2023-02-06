@@ -34,7 +34,7 @@ VOID PrintUsage()
 
 int wmain(int argc, wchar_t** argv)
 {
-	load();
+	init();
 	while ((argc > 1) && (argv[1][0] == '-'))
 	{
 		switch (argv[1][1])

